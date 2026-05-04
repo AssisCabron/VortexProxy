@@ -455,19 +455,34 @@ public final class LuaJLuauRuntime implements LuauRuntime {
 
     private LuaTable eventsApi() {
         var events = new LuaTable();
-        var startCallbacks = new LuaTable();
-        events.set("_startCallbacks", startCallbacks);
-        events.set("OnStart", new VarArgFunction() {
-            @Override
-            public Varargs invoke(Varargs args) {
-                var callback = args.arg(1).istable() ? args.arg(2) : args.arg(1);
-                if (!callback.isfunction()) {
-                    throw new LuaError("Game.Events:OnStart expects a function");
-                }
-                startCallbacks.set(startCallbacks.length() + 1, callback);
-                return LuaValue.TRUE;
+        
+        // Start Event
+        var startSignal = signalApi("OnStart");
+        events.set("OnStart", startSignal);
+        // OnStart is triggered manually by the runtime after loading
+        events.set("_startCallbacks", startSignal.get("_callbacks"));
+
+        // Player Join
+        var joinSignal = signalApi("OnPlayerJoin");
+        events.set("OnPlayerJoin", joinSignal);
+        net.minestom.server.MinecraftServer.getGlobalEventHandler().addListener(net.minestom.server.event.player.PlayerSpawnEvent.class, event -> {
+            if (!event.isFirstSpawn()) return;
+            var callbacks = joinSignal.get("_callbacks");
+            for (int i = 1; i <= callbacks.length(); i++) {
+                callbacks.get(i).call(playerApi(event.getPlayer()));
             }
         });
+
+        // Player Leave
+        var leaveSignal = signalApi("OnPlayerLeave");
+        events.set("OnPlayerLeave", leaveSignal);
+        net.minestom.server.MinecraftServer.getGlobalEventHandler().addListener(net.minestom.server.event.player.PlayerDisconnectEvent.class, event -> {
+            var callbacks = leaveSignal.get("_callbacks");
+            for (int i = 1; i <= callbacks.length(); i++) {
+                callbacks.get(i).call(playerApi(event.getPlayer()));
+            }
+        });
+
         return events;
     }
 

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class UserInterfaceApi {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserInterfaceApi.class);
     private final InstanceContainer instance;
     private final Map<String, UiElement> elements = new ConcurrentHashMap<>();
 
@@ -122,6 +123,7 @@ public final class UserInterfaceApi {
 
             entity.setInstance(instance, position);
             elements.put(name, new UiElement(entity));
+            logger.info("Vortex Studio: Created UI element '{}' at {}", name, position);
 
             return LuaValue.TRUE;
         }
