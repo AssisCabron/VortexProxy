@@ -17,6 +17,7 @@ import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Entity;
 import net.minestom.server.entity.EntityType;
 import net.minestom.server.entity.GameMode;
+import net.minestom.server.entity.metadata.display.AbstractDisplayMeta;
 import net.minestom.server.entity.metadata.display.TextDisplayMeta;
 import net.minestom.server.entity.metadata.other.InteractionMeta;
 import net.minestom.server.entity.metadata.other.ItemFrameMeta;
@@ -98,6 +99,7 @@ public final class EmbeddedVortexBackend implements BackendGateway {
     private final java.util.List<net.minestom.server.entity.Entity> galleryEntities = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private final org.assiscabron.vortexProxy.api.PlayerDatabase playerDatabase;
+    private final MultiversePortalEngine portalEngine;
     
     private double currentMspt = 0.0;
     private long lastTickNano = 0;
@@ -113,7 +115,8 @@ public final class EmbeddedVortexBackend implements BackendGateway {
         this.controlPlane = Objects.requireNonNull(controlPlane, "controlPlane");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.dashboardUrl = Objects.requireNonNull(dashboardUrl, "dashboardUrl");
-        this.scriptEngine = new ExperienceScriptEngine(logger);
+        this.portalEngine = new MultiversePortalEngine(logger);
+        this.scriptEngine = new ExperienceScriptEngine(logger, portalEngine);
         this.worldStore = new ExperienceWorldStore(Path.of("experiences"), logger);
         this.sessionManager = new LocalExperienceSessionManager(this::createExperienceInstance);
         this.playerDatabase = Objects.requireNonNull(playerDatabase, "playerDatabase");
@@ -139,6 +142,8 @@ public final class EmbeddedVortexBackend implements BackendGateway {
             spawnExperienceGallery();
             registerEvents(MinecraftServer.getGlobalEventHandler());
             registerCommands();
+
+            MinecraftServer.getSchedulerManager().buildTask(portalEngine::tick).repeat(net.minestom.server.timer.TaskSchedule.tick(1)).schedule();
 
             MinecraftServer.getSchedulerManager().buildTask(() -> {
                 long current = System.nanoTime();
@@ -550,6 +555,9 @@ public final class EmbeddedVortexBackend implements BackendGateway {
         events.addListener(PlayerBlockBreakEvent.class, this::onBlockBreak);
 
         events.addListener(PlayerMoveEvent.class, event -> {
+            var player = event.getPlayer();
+            portalEngine.checkTeleports(player);
+
             var pos = event.getNewPosition();
             if (Math.abs(pos.x()) > 22 || pos.z() < GALLERY_WALL_Z - 3 || pos.z() > 96 || pos.y() < 58) {
                 event.setNewPosition(SPAWN);
@@ -843,6 +851,31 @@ public final class EmbeddedVortexBackend implements BackendGateway {
             interaction.setInstance(shard, new Pos(card.centerX() + 0.5, 68.0, GALLERY_WALL_Z + 2.0, 0f, 0f));
             galleryEntities.add(interaction);
             cardsByEntityId.put(interaction.getEntityId(), card);
+
+            // --- DYNAMIC REVEAL MULTIVERSE PORTAL (BEHIND THE IMAGE) ---
+            double portalX = card.centerX() + 0.5;
+            double portalY = 68.0;
+            double portalZ = GALLERY_WALL_Z + 1.0; 
+
+            // Inner wall blocks (5x3) at Z = GALLERY_WALL_Z + 1 AND concrete back at Z = GALLERY_WALL_Z
+            java.util.Set<net.minestom.server.coordinate.BlockVec> wallBlocks = new java.util.HashSet<>();
+            for (int y = 67; y <= 69; y++) {
+                for (int x = card.centerX() - 2; x <= card.centerX() + 2; x++) {
+                    wallBlocks.add(new net.minestom.server.coordinate.BlockVec(x, y, GALLERY_WALL_Z + 1));
+                    wallBlocks.add(new net.minestom.server.coordinate.BlockVec(x, y, GALLERY_WALL_Z));
+                }
+            }
+
+            // Register the actual portal logic with the wall blocks to reveal
+            var session = sessionManager.publicSession(card.id());
+            portalEngine.registerPortal(new org.assiscabron.vortexProxy.core.backend.MultiversePortalEngine.Portal(
+                shard,
+                new Pos(portalX, portalY, portalZ),
+                session.instance(),
+                new Pos(0.5, 66.0, 0.5),
+                5.0, 3.0, 1.0,
+                wallBlocks
+            ));
         }
     }
 

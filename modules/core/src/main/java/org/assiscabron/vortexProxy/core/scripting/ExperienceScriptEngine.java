@@ -22,9 +22,9 @@ public final class ExperienceScriptEngine {
     private final Logger logger;
     private final LuauRuntime runtime;
 
-    public ExperienceScriptEngine(Logger logger) {
+    public ExperienceScriptEngine(Logger logger, org.assiscabron.vortexProxy.core.backend.MultiversePortalEngine portalEngine) {
         this.logger = Objects.requireNonNull(logger, "logger");
-        this.runtime = new LuaJLuauRuntime(logger);
+        this.runtime = new LuaJLuauRuntime(logger, portalEngine);
     }
 
     public void runServerScripts(ExperienceId experienceId, Path experienceRoot, InstanceContainer instance) {

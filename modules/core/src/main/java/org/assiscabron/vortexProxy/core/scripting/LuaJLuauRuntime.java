@@ -28,9 +28,11 @@ public final class LuaJLuauRuntime implements LuauRuntime {
     private static final Pattern COMPOUND_ASSIGN = Pattern.compile("^([\\t ]*)([A-Za-z_][A-Za-z0-9_\\.\\[\\]\"']*)\\s*([+\\-*/%])=\\s*(.+)$", Pattern.MULTILINE);
 
     private final Logger logger;
+    private final org.assiscabron.vortexProxy.core.backend.MultiversePortalEngine portalEngine;
 
-    public LuaJLuauRuntime(Logger logger) {
+    public LuaJLuauRuntime(Logger logger, org.assiscabron.vortexProxy.core.backend.MultiversePortalEngine portalEngine) {
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.portalEngine = portalEngine;
     }
 
     @Override
@@ -76,6 +78,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         var players = playersApi(context.instance(), context.contextPlayers());
         var chat = chatApi(context.instance(), context.contextPlayers());
         var runService = runServiceApi();
+        var ui = new UserInterfaceApi(context.instance(), context.contextPlayers()).getApi();
 
         game.set("ExperienceId", context.experienceId().value());
         game.set("Events", events);
@@ -84,6 +87,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         game.set("Players", players);
         game.set("Chat", chat);
         game.set("RunService", runService);
+        game.set("UI", ui);
         game.set("GetService", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -94,6 +98,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
                     case "workspace" -> world;
                     case "chat", "chatservice" -> chat;
                     case "runservice" -> runService;
+                    case "ui", "uiservice" -> ui;
                     default -> throw new LuaError("Unknown service: " + name);
                 };
             }
@@ -508,6 +513,39 @@ public final class LuaJLuauRuntime implements LuauRuntime {
                 return vector3Value(0.5, 66.0, 0.5);
             }
         });
+        world.set("CreatePortal", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                LuaTable config = args.checktable(1);
+                Pos sourcePos = new Pos(
+                        config.get("Position").get("X").checkdouble(),
+                        config.get("Position").get("Y").checkdouble(),
+                        config.get("Position").get("Z").checkdouble()
+                );
+                
+                // Destination instance is usually passed as a Handle or ID
+                // For now, let's assume it's another Instance userdata if available
+                net.minestom.server.instance.Instance targetInstance = (net.minestom.server.instance.Instance) config.get("Destination").get("_handle").touserdata(net.minestom.server.instance.Instance.class);
+                Pos destPos = new Pos(
+                        config.get("Destination").get("Position").get("X").checkdouble(),
+                        config.get("Destination").get("Position").get("Y").checkdouble(),
+                        config.get("Destination").get("Position").get("Z").checkdouble()
+                );
+
+                portalEngine.registerPortal(new org.assiscabron.vortexProxy.core.backend.MultiversePortalEngine.Portal(
+                        instance,
+                        sourcePos,
+                        targetInstance,
+                        destPos,
+                        config.get("Size").get("Width").optdouble(2.0),
+                        config.get("Size").get("Height").optdouble(3.0),
+                        config.get("Size").get("Depth").optdouble(0.5),
+                        java.util.Collections.emptySet()
+                ));
+                return LuaValue.TRUE;
+            }
+        });
+        world.set("_handle", LuaValue.userdataOf(instance));
         return world;
     }
 
