@@ -15,6 +15,7 @@
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="vortexproxy-bootstrap" target="21" />
+      <module name="vortexproxy-studio-link" target="21" />
     </bytecodeTargetLevel>
   </component>
 </project>

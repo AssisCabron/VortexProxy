@@ -22,6 +22,11 @@
         
         <!-- Core logic dependencies -->
         <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.7</version>
+        </dependency>
+        <dependency>
             <groupId>org.luaj</groupId>
             <artifactId>luaj-jse</artifactId>
         </dependency>

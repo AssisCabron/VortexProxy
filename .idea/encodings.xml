@@ -13,6 +13,8 @@
     <file url="file://$PROJECT_DIR$/modules/platform-bukkit/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/modules/platform-proxy/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/modules/platform-proxy/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/modules/studio-link/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/modules/studio-link/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>

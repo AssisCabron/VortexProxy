@@ -48,6 +48,7 @@ import org.assiscabron.vortexProxy.core.scripting.ExperienceScriptEngine;
 import org.slf4j.Logger;
 
 import javax.imageio.ImageIO;
+import org.assiscabron.vortexProxy.core.studio.StudioLinkServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -100,6 +101,7 @@ public final class EmbeddedVortexBackend implements BackendGateway {
 
     private final org.assiscabron.vortexProxy.api.PlayerDatabase playerDatabase;
     private final MultiversePortalEngine portalEngine;
+    private StudioLinkServer studioLinkServer;
     
     private double currentMspt = 0.0;
     private long lastTickNano = 0;
@@ -141,6 +143,10 @@ public final class EmbeddedVortexBackend implements BackendGateway {
             
             spawnExperienceGallery();
             registerEvents(MinecraftServer.getGlobalEventHandler());
+
+            this.studioLinkServer = new StudioLinkServer(8080, this::onCLIFileSync);
+            this.studioLinkServer.start();
+
             registerCommands();
 
             MinecraftServer.getSchedulerManager().buildTask(portalEngine::tick).repeat(net.minestom.server.timer.TaskSchedule.tick(1)).schedule();
@@ -399,8 +405,16 @@ public final class EmbeddedVortexBackend implements BackendGateway {
                         }
                     }
                     if (isGalleryWall(absoluteX, absoluteZ)) {
+                        boolean behindCard = false;
+                        for (var card : experienceCards()) {
+                            if (Math.abs(absoluteX - card.centerX()) <= 2) {
+                                behindCard = true;
+                                break;
+                            }
+                        }
                         for (int y = 65; y <= 73; y++) {
-                            modifier.setBlock(absoluteX, y, absoluteZ, Block.WHITE_CONCRETE);
+                            boolean inCardY = y >= 67 && y <= 69;
+                            modifier.setBlock(absoluteX, y, absoluteZ, (behindCard && inCardY) ? Block.AIR : Block.WHITE_CONCRETE);
                         }
                         if (absoluteX % 4 == 0) {
                             modifier.setBlock(absoluteX, 72, absoluteZ + 1, Block.SEA_LANTERN);
@@ -418,7 +432,7 @@ public final class EmbeddedVortexBackend implements BackendGateway {
                                 var border = Math.abs(absoluteX - card.centerX()) == 3 || y == 66 || y == 70;
                                 modifier.setBlock(absoluteX, y, absoluteZ, border
                                         ? Block.QUARTZ_BLOCK
-                                        : card.block());
+                                        : Block.AIR);
                             }
                         }
                         if (isExperienceFloor(card, absoluteX, absoluteZ)) {
@@ -718,9 +732,32 @@ public final class EmbeddedVortexBackend implements BackendGateway {
         });
         MinecraftServer.getCommandManager().register(shardsCommand);
 
+        var linkDirect = new Command("vincular");
+        linkDirect.addSyntax((sender, context) -> {
+            if (!(sender instanceof net.minestom.server.entity.Player player)) return;
+            String code = context.get("code");
+            if (studioLinkServer.confirmLink(player.getUuid(), code)) {
+                player.sendMessage(Component.text("§b[Vortex Studio] §7Terminal vinculado com sucesso!", NamedTextColor.AQUA));
+            } else {
+                player.sendMessage(Component.text("§c[Vortex Studio] §7Código inválido ou expirado.", NamedTextColor.RED));
+            }
+        }, ArgumentType.String("code"));
+        MinecraftServer.getCommandManager().register(linkDirect);
+        logger.info("[Vortex] Comando /vincular registrado com sucesso.");
+
         var command = new Command("vortex", "vx");
         command.setDefaultExecutor((sender, context) -> sendStatus(sender));
         command.addSyntax((sender, context) -> sendStatus(sender), ArgumentType.Literal("status"));
+        
+        command.addSyntax((sender, context) -> {
+            if (!(sender instanceof net.minestom.server.entity.Player player)) return;
+            String code = context.get("code");
+            if (studioLinkServer.confirmLink(player.getUuid(), code)) {
+                player.sendMessage(Component.text("§b[Vortex Studio] §7Terminal vinculado com sucesso! §aO ambiente local agora está sincronizado.", NamedTextColor.AQUA));
+            } else {
+                player.sendMessage(Component.text("§c[Vortex Studio] §7Código de vínculo inválido ou já expirado.", NamedTextColor.RED));
+            }
+        }, ArgumentType.Literal("vincular"), ArgumentType.String("code"));
         command.addSyntax((sender, context) -> sendExperiences(sender), ArgumentType.Literal("experiences"), ArgumentType.Literal("experiencias"));
         command.addSyntax((sender, context) -> sendVirtuals(sender), ArgumentType.Literal("virtuals"), ArgumentType.Literal("virtuais"));
         command.addSyntax((sender, context) -> sendDashboard(sender), ArgumentType.Literal("dashboard"), ArgumentType.Literal("studio"));
@@ -733,10 +770,9 @@ public final class EmbeddedVortexBackend implements BackendGateway {
         sender.sendMessage(Component.text("--------- [ Status do Vortex ] ---------", NamedTextColor.AQUA));
         sender.sendMessage(Component.text("Experiências: ", NamedTextColor.GRAY)
             .append(Component.text(controlPlane.experiences().list().size(), NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("Instâncias em execução: ", NamedTextColor.GRAY)
-            .append(Component.text(controlPlane.instances().list().size(), NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("Shells virtuais: ", NamedTextColor.GRAY)
-            .append(Component.text(controlPlane.virtualInstances().list().size(), NamedTextColor.WHITE)));
+        sender.sendMessage(Component.text("Studio Link: ", NamedTextColor.GRAY)
+            .append(Component.text("Ativo (Port 8080)", NamedTextColor.YELLOW)));
+        sender.sendMessage(Component.text("Comando: /vx vincular <code>", NamedTextColor.GRAY));
         
         var avail = available();
         var availText = avail ? "DISPONÍVEL" : "INDISPONÍVEL";
@@ -1202,5 +1238,60 @@ public final class EmbeddedVortexBackend implements BackendGateway {
             Optional<Integer> mapId,
             Optional<String> galleryImage
     ) {
+    }
+
+    private void onCLIFileSync(UUID playerId, String experienceId, String path, String contentBase64) {
+        var expId = new ExperienceId(experienceId);
+        
+        // 1. Security Check: Ownership
+        var manifestOpt = controlPlane.experiences().find(expId);
+        if (manifestOpt.isEmpty()) {
+            logger.warn("Vortex Studio: Experience {} not found for sync", experienceId);
+            return;
+        }
+        
+        var manifest = manifestOpt.get();
+        var ownerOpt = manifest.owner();
+        boolean isOwner = ownerOpt.isPresent() && ownerOpt.get().playerId().equals(playerId.toString());
+        
+        // FOR DEV MODE: If experience has no owner, let's allow it (but log it)
+        if (ownerOpt.isEmpty()) {
+            logger.warn("Vortex Studio: Experience {} has no owner defined. Allowing sync but this is insecure for production.", experienceId);
+        } else if (!isOwner) {
+            logger.error("Security Violation: Player {} (UUID) tried to sync scripts to experience {} owned by {}!", 
+                playerId, experienceId, ownerOpt.get().playerId());
+            return;
+        }
+
+        if (contentBase64 == null) {
+            logger.warn("Vortex Studio: Received sync for {} with null content. Skipping.", path);
+            return;
+        }
+
+        byte[] data = java.util.Base64.getDecoder().decode(contentBase64);
+        var experienceRoot = Path.of("experiences").resolve(experienceId).resolve("scripts").resolve("server").toAbsolutePath().normalize();
+        
+        // 2. Prevent directory traversal
+        var filePath = experienceRoot.resolve(path).normalize();
+        if (!filePath.startsWith(experienceRoot)) {
+            logger.error("Security Violation: Attempted directory traversal sync for experience {}. Root: {}, Path: {}", experienceId, experienceRoot, filePath);
+            return;
+        }
+
+        try {
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, data);
+            logger.info("Vortex Studio: Synced file {} for experience {}", path, experienceId);
+
+            // Hot Reload if anyone is in this experience
+            var session = sessionManager.publicSession(expId);
+            if (session != null) {
+                scriptEngine.runServerScripts(expId, experienceRoot, session.instance());
+                var notification = Component.text("§b[Vortex Studio] §7Script §f" + path + " §7sincronizado e recarregado!", NamedTextColor.GRAY);
+                session.instance().getPlayers().forEach(p -> p.sendMessage(notification));
+            }
+        } catch (IOException e) {
+            logger.error("Failed to sync Vortex Studio file", e);
+        }
     }
 }

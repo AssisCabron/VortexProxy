@@ -112,14 +112,15 @@ public final class MultiversePortalEngine {
         double dx = Math.abs(pos.x() - portal.sourcePos().x());
         double dy = pos.y() - portal.sourcePos().y();
         
-        // Z detection: allow a buffer in front of the portal Z (usually -7.0)
-        // Since players move towards negative Z in the gallery, we check if they are near Z + buffer
+        // Z detection: The portal surface is at Z = -7.0.
+        // We trigger ONLY when the player has physically 'stepped through' the wall
+        // touching the first generated block at Z = -8.1.
         double dz = pos.z() - portal.sourcePos().z();
         
-        // If player is within 0.8 blocks in front of the portal and within 0.5 blocks behind
-        boolean withinZ = dz >= -0.5 && dz <= 0.8;
+        // Trigger precisely when stepping onto the first virtual block (-1.1 relative to -7.0)
+        boolean withinZ = dz <= -1.1 && dz >= -2.0;
         boolean withinX = dx < portal.width() / 2.0;
-        boolean withinY = dy >= -1 && dy < portal.height(); // Extra Y tolerance
+        boolean withinY = dy >= -1 && dy < portal.height();
         
         return withinX && withinY && withinZ;
     }
