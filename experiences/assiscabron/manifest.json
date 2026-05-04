@@ -1,0 +1,23 @@
+{
+  "id": "assiscabron",
+  "name": "Plataforma do Assis",
+  "version": "0.1.0",
+  "entrypoints": {
+    "server": "scripts/server/init.lua"
+  },
+  "permissions": [
+    "players.read",
+    "ui.render"
+  ],
+  "resources": {
+    "maxPlayers": 200,
+    "maxEntities": 250,
+    "luaInstructionBudgetPerTick": 50000,
+    "memoryMb": 64
+  },
+  "presentation": {
+    "description": "A plataforma do Assis.",
+    "galleryImage": "classpath:/assets/vortex/platform_home.jpg",
+    "accentBlock": "cyan_concrete"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "platform_home",
+  "name": "Platform Home",
+  "version": "0.1.0",
+  "entrypoints": {
+    "server": "scripts/server/init.lua"
+  },
+  "permissions": [
+    "players.read",
+    "ui.render"
+  ],
+  "resources": {
+    "maxPlayers": 200,
+    "maxEntities": 250,
+    "luaInstructionBudgetPerTick": 50000,
+    "memoryMb": 64
+  },
+  "presentation": {
+    "description": "The default Vortex platform experience.",
+    "galleryImage": "classpath:/assets/vortex/platform_home.jpg",
+    "accentBlock": "cyan_concrete"
+  }
+}

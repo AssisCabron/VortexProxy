@@ -1,0 +1,6 @@
+{
+  "id": "vortexproxy",
+  "name": "VortexProxy",
+  "version": "${version}",
+  "main": "org.assiscabron.vortexProxy.platform.proxy.VortexProxy"
+}
