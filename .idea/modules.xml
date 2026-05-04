@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/vortexproxy.iml" filepath="$PROJECT_DIR$/vortexproxy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/modules/api/vortexproxy-api.iml" filepath="$PROJECT_DIR$/modules/api/vortexproxy-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/modules/core/vortexproxy-core.iml" filepath="$PROJECT_DIR$/modules/core/vortexproxy-core.iml" />
+      <module fileurl="file://$PROJECT_DIR$/modules/platform-bukkit/vortexproxy-platform-bukkit.iml" filepath="$PROJECT_DIR$/modules/platform-bukkit/vortexproxy-platform-bukkit.iml" />
+      <module fileurl="file://$PROJECT_DIR$/modules/platform-proxy/vortexproxy-platform-proxy.iml" filepath="$PROJECT_DIR$/modules/platform-proxy/vortexproxy-platform-proxy.iml" />
+    </modules>
+  </component>
+</project>
