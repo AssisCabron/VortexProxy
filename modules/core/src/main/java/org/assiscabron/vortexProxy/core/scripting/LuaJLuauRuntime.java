@@ -78,7 +78,8 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         var players = playersApi(context.instance(), context.contextPlayers());
         var chat = chatApi(context.instance(), context.contextPlayers());
         var runService = runServiceApi();
-        var ui = new UserInterfaceApi(context.instance(), context.contextPlayers()).getApi();
+        var shards = new WorldApi().getApi();
+        var ui = new UserInterfaceApi(this, context.instance(), context.contextPlayers()).getApi();
 
         game.set("ExperienceId", context.experienceId().value());
         game.set("Events", events);
@@ -88,6 +89,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         game.set("Chat", chat);
         game.set("RunService", runService);
         game.set("UI", ui);
+        game.set("Shards", shards);
         game.set("GetService", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
@@ -581,7 +583,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         return players;
     }
 
-    private LuaTable playerApi(Player player) {
+    LuaTable playerApi(Player player) {
         var api = new LuaTable();
         api.set("_handle", LuaValue.userdataOf(player));
         api.set("Name", player.getUsername());
@@ -605,7 +607,7 @@ public final class LuaJLuauRuntime implements LuauRuntime {
         api.set("Teleport", new VarArgFunction() {
             @Override
             public Varargs invoke(Varargs args) {
-                var offset = args.arg(1).istable() ? 1 : 0;
+                var offset = args.arg(1).istable() && !isPlayerApi(args.arg(1)) ? 1 : 0;
                 var first = args.arg(1 + offset);
                 if (first.istable() && !first.get("X").isnil()) {
                     player.teleport(new Pos(first.get("X").todouble(), first.get("Y").todouble(), first.get("Z").todouble()));
@@ -616,6 +618,23 @@ public final class LuaJLuauRuntime implements LuauRuntime {
                         args.checkdouble(2 + offset),
                         args.checkdouble(3 + offset)
                 ));
+                return LuaValue.TRUE;
+            }
+        });
+        api.set("SetInstance", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs args) {
+                var offset = args.arg(1).istable() && !isPlayerApi(args.arg(1)) ? 1 : 0;
+                var instanceObj = args.checktable(1 + offset);
+                var instance = (net.minestom.server.instance.Instance) instanceObj.get("_handle").checkuserdata(net.minestom.server.instance.Instance.class);
+                
+                var pos = new Pos(0.5, 66.0, 0.5);
+                if (args.narg() >= 2 + offset) {
+                    var posTable = args.checktable(2 + offset);
+                    pos = new Pos(posTable.get("X").todouble(), posTable.get("Y").todouble(), posTable.get("Z").todouble());
+                }
+                
+                player.setInstance(instance, pos);
                 return LuaValue.TRUE;
             }
         });

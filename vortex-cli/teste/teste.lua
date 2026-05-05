@@ -1,42 +1,28 @@
--- Player.lua
-local Player = {}
-Player.__index = Player
-
--- Construtor
-function Player.new(name)
-    local self = setmetatable({}, Player)
+-- Vortex Infinite Shard & Natural Terrain Test
+Game.Events.OnPlayerJoin:Connect(function(player)
+    player:SendMessage("§b[Vortex] §7Gerando seu planeta procedural em RAM...")
     
-    self.name = name or "Unknown"
-    self.health = 100
-    self.maxHealth = 100
+    -- 1. Criar o Shard Dinâmico com Terreno Natural (Perlin Noise)
+    local meuPlaneta = Game.Shards:CreateInstance("NATURAL")
     
-    return self
-end
-
-function Player:TakeDamage(amount)
-    self.health = math.max(self.health - amount, 0)
+    -- 2. Teletransportar o jogador para o novo mundo
+    -- Como o terreno é procedural, o spawn 66 pode ser dentro de uma montanha ou no ar.
+    -- O nosso gerador fixa a média em 64, então 68 é seguro.
+    player:SetInstance(meuPlaneta, {X=0.5, Y=68, Z=0.5})
     
-    print(self.name .. " tomou " .. amount .. " de dano!")
+    -- 3. HUD de Status da Infra
+    Game.UI:CreateElement("infra_info", "§d§lINFRAESTRUTURA VORTEX\n§7Modo: §fProcedural Natural\n§7Motor: §fPerlin Noise Shard", {X=0.5, Y=72, Z=0.5})
+    Game.UI:UpdateElement("infra_info", {
+        Scale = 1.2,
+        BackgroundColor = "#DD000000"
+    })
     
-    if self.health <= 0 then
-        self:Die()
-    end
-end
+    -- 4. Botão flutuante de inspeção técnica
+    Game.UI:CreateElement("inspect_btn", "§e[ INSPECIONAR BIOMA ]", {X=0.5, Y=71, Z=0.5})
+    Game.UI:OnClick("inspect_btn", function(p)
+        p:SendMessage("§e[Vortex Info] §7Este terreno não existe no HD. Ele é calculado matematicamente enquanto você caminha.")
+        p:SendMessage("§e[Vortex Info] §7FPS: §aEstável §8| §7RAM: §aOtimizada")
+    end)
 
--- Método de cura
-function Player:Heal(amount)
-    self.health = math.min(self.health + amount, self.maxHealth)
-    
-    print(self.name .. " curou " .. amount .. " de vida!")
-end
-
--- Método ao morrer
-function Player:Die()
-    print(self.name .. " morreu 💀")
-end
-
-return Player
-
-
-
-
+    player:SendMessage("§aPlaneta Procedural criado! Explore as montanhas.")
+end)

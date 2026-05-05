@@ -1,9 +1,6 @@
 package org.assiscabron.vortexProxy.core.backend;
 
-import org.assiscabron.vortexProxy.api.ExperienceId;
-
-import org.assiscabron.vortexProxy.api.ExperienceId;
-
+import net.minestom.server.coordinate.Pos;
 import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.Block;
 import org.assiscabron.vortexProxy.api.ExperienceId;
@@ -17,6 +14,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 final class ExperienceWorldStore {
@@ -25,6 +24,7 @@ final class ExperienceWorldStore {
     private final Path experiencesRoot;
     private final Logger logger;
     private final Map<ExperienceId, Map<BlockPosition, String>> editedBlocks = new ConcurrentHashMap<>();
+    private final Map<ExperienceId, Map<UUID, Pos>> playerPositions = new ConcurrentHashMap<>();
 
     ExperienceWorldStore(Path experiencesRoot, Logger logger) {
         this.experiencesRoot = Objects.requireNonNull(experiencesRoot, "experiencesRoot");
@@ -41,6 +41,72 @@ final class ExperienceWorldStore {
                 continue;
             }
             instance.setBlock(position.x(), position.y(), position.z(), block);
+        }
+    }
+
+    void savePlayerPosition(ExperienceId experienceId, UUID playerUuid, Pos position) {
+        playerPositions.computeIfAbsent(experienceId, id -> readPlayerPositions(id))
+                .put(playerUuid, position);
+        savePositions(experienceId);
+    }
+
+    Optional<Pos> loadPlayerPosition(ExperienceId experienceId, UUID playerUuid) {
+        return Optional.ofNullable(playerPositions.computeIfAbsent(experienceId, id -> readPlayerPositions(id))
+                .get(playerUuid));
+    }
+
+    private Map<UUID, Pos> readPlayerPositions(ExperienceId experienceId) {
+        var positions = new ConcurrentHashMap<UUID, Pos>();
+        var file = playerFile(experienceId);
+        if (!Files.isRegularFile(file)) {
+            return positions;
+        }
+
+        try {
+            for (var line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                var trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                var parts = trimmed.split("\\s+");
+                if (parts.length != 6) {
+                    continue;
+                }
+                positions.put(
+                        UUID.fromString(parts[0]),
+                        new Pos(
+                                Double.parseDouble(parts[1]),
+                                Double.parseDouble(parts[2]),
+                                Double.parseDouble(parts[3]),
+                                Float.parseFloat(parts[4]),
+                                Float.parseFloat(parts[5])
+                        )
+                );
+            }
+        } catch (Exception exception) {
+            logger.warn("Could not load player positions for {}.", experienceId.value(), exception);
+        }
+        return positions;
+    }
+
+    private void savePositions(ExperienceId experienceId) {
+        var file = playerFile(experienceId);
+        var positions = playerPositions.getOrDefault(experienceId, Map.of());
+        try {
+            Files.createDirectories(file.getParent());
+            var builder = new StringBuilder("# Vortex saved player positions v1\n");
+            for (var entry : positions.entrySet()) {
+                var pos = entry.getValue();
+                builder.append(entry.getKey()).append(' ')
+                        .append(pos.x()).append(' ')
+                        .append(pos.y()).append(' ')
+                        .append(pos.z()).append(' ')
+                        .append(pos.yaw()).append(' ')
+                        .append(pos.pitch()).append('\n');
+            }
+            Files.writeString(file, builder.toString());
+        } catch (IOException exception) {
+            logger.warn("Could not save player positions for {}.", experienceId.value(), exception);
         }
     }
 
@@ -117,6 +183,10 @@ final class ExperienceWorldStore {
 
     private Path worldFile(ExperienceId experienceId) {
         return experiencesRoot.resolve(experienceId.value()).resolve(WORLD_FILE).normalize();
+    }
+
+    private Path playerFile(ExperienceId experienceId) {
+        return experiencesRoot.resolve(experienceId.value()).resolve("world/players.vortex").normalize();
     }
 
     private record BlockPosition(int x, int y, int z) {

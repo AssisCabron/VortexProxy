@@ -61,6 +61,12 @@ public class VortexProxy {
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
+        Path pluginsFolder = dataDirectory.getParent();
+        if (org.assiscabron.vortexProxy.platform.proxy.util.ViaAutoInstaller.checkAndInstall(pluginsFolder, logger)) {
+             proxyServer.shutdown(Component.text("Vortex: Compatibility Bridge downloaded! Please start the proxy again to apply the injector."));
+             return;
+        }
+
         var catalog = new InMemoryExperienceCatalog();
         var instances = new InMemoryInstanceRegistry();
         var virtualInstances = new InMemoryVirtualInstanceService();

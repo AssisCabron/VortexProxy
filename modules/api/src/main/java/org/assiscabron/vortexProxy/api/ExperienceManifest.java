@@ -6,6 +6,8 @@ import org.assiscabron.vortexProxy.api.ExperienceOwner;
 import org.assiscabron.vortexProxy.api.ExperiencePresentation;
 import org.assiscabron.vortexProxy.api.ResourceLimits;
 
+import org.assiscabron.vortexProxy.api.WorldType;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,7 +21,8 @@ public record ExperienceManifest(
         List<String> permissions,
         ResourceLimits resources,
         ExperiencePresentation presentation,
-        Optional<ExperienceOwner> owner
+        Optional<ExperienceOwner> owner,
+        WorldType worldType
 ) {
     public ExperienceManifest {
         Objects.requireNonNull(id, "id");
@@ -33,6 +36,7 @@ public record ExperienceManifest(
         resources = Objects.requireNonNull(resources, "resources");
         presentation = Objects.requireNonNull(presentation, "presentation");
         owner = Objects.requireNonNull(owner, "owner");
+        worldType = Objects.requireNonNull(worldType, "worldType");
     }
 
     public ExperienceManifest(
@@ -44,7 +48,7 @@ public record ExperienceManifest(
             ResourceLimits resources,
             ExperiencePresentation presentation
     ) {
-        this(id, name, version, entrypoints, permissions, resources, presentation, ExperienceOwner.none());
+        this(id, name, version, entrypoints, permissions, resources, presentation, ExperienceOwner.none(), WorldType.NATURAL);
     }
 
     public ExperienceManifest(

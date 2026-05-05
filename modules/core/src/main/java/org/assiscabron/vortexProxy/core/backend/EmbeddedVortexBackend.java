@@ -468,10 +468,17 @@ public final class EmbeddedVortexBackend implements BackendGateway {
     }
 
     private void openExperienceStudio(net.minestom.server.entity.Player player, ExperienceId experienceId) {
+        // Save position in current experience before switching
+        if (player.getInstance() != null) {
+            savePlayerPosition(player, player.getInstance());
+        }
         controlPlane.virtualInstances().launch(player.getUuid(), experienceId);
         var session = sessionManager.studioSession(player.getUuid(), experienceId);
         studioEditingExperience.put(player.getUuid(), experienceId);
-        player.setInstance(session.instance(), new Pos(0.5, 66.0, 0.5))
+        
+        var pos = worldStore.loadPlayerPosition(experienceId, player.getUuid()).orElse(new Pos(0.5, 66.0, 0.5));
+        
+        player.setInstance(session.instance(), pos)
                 .thenRun(() -> MinecraftServer.getSchedulerManager().buildTask(() -> applyStudioMode(player)).schedule());
         applyStudioMode(player);
         runExperienceScripts(experienceId, session.instance(), List.of(player));
@@ -572,11 +579,15 @@ public final class EmbeddedVortexBackend implements BackendGateway {
             var player = event.getPlayer();
             portalEngine.checkTeleports(player);
 
-            var pos = event.getNewPosition();
-            if (Math.abs(pos.x()) > 22 || pos.z() < GALLERY_WALL_Z - 3 || pos.z() > 96 || pos.y() < 58) {
-                event.setNewPosition(SPAWN);
+            if (isHomeShard(event.getInstance())) {
+                var pos = event.getNewPosition();
+                if (Math.abs(pos.x()) > 22 || pos.z() < GALLERY_WALL_Z - 3 || pos.z() > 96 || pos.y() < 58) {
+                    event.setNewPosition(SPAWN);
+                }
             }
         });
+
+
 
         // Isolate chat messages to the same instance (same experience/lobby)
         events.addListener(net.minestom.server.event.player.PlayerChatEvent.class, event -> {
@@ -589,10 +600,24 @@ public final class EmbeddedVortexBackend implements BackendGateway {
 
         events.addListener(PlayerDisconnectEvent.class, event ->
         {
-            studioEditingExperience.remove(event.getPlayer().getUuid());
-            logger.info("{} left embedded Vortex backend.", event.getPlayer().getUsername());
+            var player = event.getPlayer();
+            var instance = player.getInstance();
+            if (instance != null) {
+                savePlayerPosition(player, instance);
+            }
+            studioEditingExperience.remove(player.getUuid());
+            logger.info("{} left embedded Vortex backend.", player.getUsername());
             cleanupEmptyShards();
         });
+    }
+
+    private void savePlayerPosition(net.minestom.server.entity.Player player, Instance instance) {
+        var session = sessionManager.byInstance(instance);
+        if (session.isPresent()) {
+            var expId = session.get().experienceId();
+            worldStore.savePlayerPosition(expId, player.getUuid(), player.getPosition());
+            logger.info("Saved position for {} in experience {}", player.getUsername(), expId.value());
+        }
     }
 
     private void onBlockPlace(PlayerBlockPlaceEvent event) {
@@ -934,21 +959,68 @@ public final class EmbeddedVortexBackend implements BackendGateway {
 
     private InstanceContainer createExperienceInstance(ExperienceId id, ExperienceSessionMode mode) {
         var instance = MinecraftServer.getInstanceManager().createInstanceContainer();
-        instance.setGenerator(unit -> {
-            // Ground from 0 to 63
-            unit.modifier().fillHeight(0, 63, Block.DIRT);
-            // Top layer at 63
-            unit.modifier().fillHeight(63, 64, Block.GRASS_BLOCK);
-        });
+        instance.setChunkSupplier(LightingChunk::new);
+        
+        var manifest = controlPlane.experiences().find(id).orElse(null);
+        org.assiscabron.vortexProxy.api.WorldType worldType = (manifest != null) ? manifest.worldType() : org.assiscabron.vortexProxy.api.WorldType.NATURAL;
+
+        if (worldType == org.assiscabron.vortexProxy.api.WorldType.NATURAL) {
+            instance.setGenerator(new VortexWorldGenerator());
+        } else if (worldType == org.assiscabron.vortexProxy.api.WorldType.FLAT) {
+            instance.setGenerator(unit -> {
+                if (unit.absoluteStart().blockY() < 64) {
+                    unit.modifier().fillHeight(0, 63, Block.DIRT);
+                    unit.modifier().fillHeight(63, 64, Block.GRASS_BLOCK);
+                }
+            });
+        } else {
+            // VOID
+            instance.setGenerator(unit -> {
+                if (unit.absoluteStart().blockX() == 0 && unit.absoluteStart().blockZ() == 0 && unit.absoluteStart().blockY() < 64) {
+                    unit.modifier().setBlock(0, 60, 0, Block.BEDROCK);
+                }
+            });
+        }
+
+        instance.setTime(6000);
+        instance.setTimeRate(0);
+        instance.setWeather(Weather.CLEAR, 1);
         worldStore.loadInto(id, instance);
+
+        // Enforce chunk rendering texturization for seamless world exploring
+        // Sometimes Minestom doesn't dispatch chunks immediately if light calculus is slightly delayed
+        instance.eventNode().addListener(net.minestom.server.event.instance.InstanceChunkLoadEvent.class, event -> {
+            net.minestom.server.MinecraftServer.getSchedulerManager().buildTask(() -> {
+                var chunk = event.getChunk();
+                for (var p : instance.getPlayers()) {
+                    // Resend to players in standard simulation distance logic
+                    chunk.sendChunk(p);
+                }
+            }).delay(100, java.time.temporal.ChronoUnit.MILLIS).schedule();
+        });
+
+        // Pre-load chunks around spawn so the client renders them immediately
+        for (int cx = -8; cx <= 8; cx++) {
+            for (int cz = -8; cz <= 8; cz++) {
+                instance.loadChunk(cx, cz);
+            }
+        }
+
         logger.info("Created {} virtual session container for experience: {}", mode, id.value());
         return instance;
     }
 
     private void openExperiencePlayer(net.minestom.server.entity.Player player, ExperienceId id) {
+        // Save position in current experience before switching
+        if (player.getInstance() != null) {
+            savePlayerPosition(player, player.getInstance());
+        }
         var session = sessionManager.publicSession(id);
         studioEditingExperience.remove(player.getUuid());
-        player.setInstance(session.instance(), new Pos(0.5, 66.0, 0.5))
+        
+        var pos = worldStore.loadPlayerPosition(id, player.getUuid()).orElse(new Pos(0.5, 66.0, 0.5));
+        
+        player.setInstance(session.instance(), pos)
                 .thenRun(() -> MinecraftServer.getSchedulerManager()
                         .buildTask(() -> {
                             applyPlayMode(player);

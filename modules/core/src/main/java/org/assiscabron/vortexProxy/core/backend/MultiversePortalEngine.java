@@ -179,12 +179,12 @@ public final class MultiversePortalEngine {
         
         Map<BlockVec, Block> cache = virtualEnvironmentCache.computeIfAbsent(viewer.getUuid(), k -> new ConcurrentHashMap<>());
 
-        // LARGE AREA MIRRORING
-        // Broad range: X: -16 to 16, Y: -8 to 8, Z: -1 to -32
-        // We only mirror a subset per tick if we are out of range to avoid lag
-        int hRange = closeRange ? 16 : 8;
-        int dRange = closeRange ? 32 : 12;
-        int yRange = closeRange ? 8 : 4;
+        // REDUCED AREA MIRRORING FOR PERFORMANCE
+        // Instead of 16-32 blocks deep which causes thousands of block checks per tick,
+        // we narrow down the vision scope to something perfectly playable and lightweight
+        int hRange = closeRange ? 4 : 2;
+        int dRange = closeRange ? 8 : 4;
+        int yRange = closeRange ? 3 : 1;
 
         for (int x = -hRange; x <= hRange; x++) {
             for (int z = -1; z >= -dRange; z--) {

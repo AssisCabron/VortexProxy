@@ -25,10 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class UserInterfaceApi {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserInterfaceApi.class);
+    private final LuaJLuauRuntime runtime;
     private final InstanceContainer instance;
     private final Map<String, UiElement> elements = new ConcurrentHashMap<>();
 
-    public UserInterfaceApi(InstanceContainer instance, Collection<Player> contextPlayers) {
+    public UserInterfaceApi(LuaJLuauRuntime runtime, InstanceContainer instance, Collection<Player> contextPlayers) {
+        this.runtime = runtime;
         this.instance = instance;
         
         // Tick task for pinned elements
@@ -310,12 +312,8 @@ public final class UserInterfaceApi {
         return (Player) handle.touserdata(Player.class);
     }
     
-    // Stub for now, should map back to existing Lua player API
     private LuaValue playerApi(Player player) {
-        LuaTable api = new LuaTable();
-        api.set("_handle", LuaValue.userdataOf(player));
-        api.set("Name", player.getUsername());
-        return api;
+        return runtime.playerApi(player);
     }
 
     private Component parseText(String text) {

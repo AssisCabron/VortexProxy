@@ -5,6 +5,7 @@ import org.assiscabron.vortexProxy.api.ExperienceManifest;
 import org.assiscabron.vortexProxy.api.ExperienceOwner;
 import org.assiscabron.vortexProxy.api.ExperiencePresentation;
 import org.assiscabron.vortexProxy.api.ResourceLimits;
+import org.assiscabron.vortexProxy.api.WorldType;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -68,7 +69,8 @@ public final class ExperiencePackageLoader {
                 parseStringList(json, "permissions"),
                 resources,
                 parsePresentation(packageRoot, object(json, "presentation").orElse(new JsonObject())),
-                parseOwner(object(json, "owner").orElse(null))
+                parseOwner(object(json, "owner").orElse(null)),
+                WorldType.fromString(optionalString(json, "worldType").orElse("NATURAL"))
         );
     }
 
